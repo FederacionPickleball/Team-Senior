@@ -224,6 +224,109 @@
     letter-spacing: 0.5px;
     margin-top: 18px !important;
   }
+
+  /* Admin */
+  .admin-toggle{
+    position: fixed; bottom: 16px; right: 16px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 11px; color: var(--gris);
+    background: white; border: 1px solid var(--linea);
+    padding: 6px 12px; border-radius: 999px;
+    cursor:pointer;
+  }
+  .admin-panel{ display:none; }
+  .admin-panel.activo{ display:block; }
+  .form-panel.oculto{ display:none; }
+
+  table.resumen{
+    width:100%;
+    border-collapse: collapse;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 12.5px;
+  }
+  table.resumen th, table.resumen td{
+    border: 1px solid var(--linea);
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: top;
+  }
+  table.resumen th{
+    background: var(--azul);
+    color: white;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .descargar-btn{
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    background: var(--azul);
+    color: white;
+    border: none;
+    padding: 11px 22px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-right: 10px;
+    margin-bottom: 16px;
+  }
+  .refrescar-btn{
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    background: transparent;
+    color: var(--azul);
+    border: 1.5px solid var(--azul);
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 16px;
+  }
+  .respuesta-card{ padding: 18px 20px; }
+  .respuesta-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    margin-bottom: 12px;
+    gap: 10px;
+  }
+  .respuesta-jugador{
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--azul);
+  }
+  .respuesta-fecha{
+    font-size: 11.5px;
+    color: var(--gris);
+    margin-top: 2px;
+  }
+  .eliminar-btn{
+    background: transparent;
+    color: var(--rojo);
+    border: 1.5px solid var(--rojo);
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .eliminar-btn:hover{ background: var(--rojo); color: white; }
+  .accion-eliminar{ display:flex; align-items:center; gap:8px; flex-shrink:0; }
+  .confirmar-texto{ font-size: 11.5px; color: var(--gris); }
+  .confirmar-si, .confirmar-no{
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .confirmar-si{ background: var(--rojo); color: white; }
+  .confirmar-no{ background: var(--linea); color: var(--azul); }
 </style>
 </head>
 <body>
@@ -287,7 +390,21 @@
     <p class="exito-grito">¡VAMOS TEAM SENIOR!!</p>
   </div>
 
+  <div class="admin-panel" id="adminPanel">
+    <div class="card">
+      <label class="field-label">Clave de acceso</label>
+      <input type="text" id="adminPass" placeholder="Ingresa la clave">
+      <div style="margin-top:12px;">
+        <button class="descargar-btn utility" id="btnDesbloquear" type="button">Ver respuestas</button>
+      </div>
+      <div class="estado" id="adminEstado"></div>
+    </div>
+    <div id="adminContenido"></div>
+  </div>
+
 </main>
+
+<div class="admin-toggle utility" id="adminToggle">Panel Michi</div>
 
 <script>
 const HOMBRES = ["Luis Urrutia", "Eduardo Fuenzalida", "André Loustalot", "Cristian Loustalot", "Marcelo Avendaño"];
@@ -523,6 +640,177 @@ document.getElementById("btnEnviar").addEventListener("click", async () => {
     btn.textContent = "Enviar mi visión";
   }
 });
+
+// --- Panel Admin ---
+document.getElementById("adminToggle").addEventListener("click", () => {
+  document.getElementById("formPanel").classList.toggle("oculto");
+  document.getElementById("exitoPanel").style.display = "none";
+  document.getElementById("adminPanel").classList.toggle("activo");
+});
+
+let claveGuardada = "";
+
+async function llamarPanel(payload){
+  const resp = await fetch("/.netlify/functions/panel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const data = await resp.json().catch(() => ({}));
+  if(!resp.ok){
+    throw new Error(data.error || ("Error " + resp.status));
+  }
+  return data;
+}
+
+document.getElementById("btnDesbloquear").addEventListener("click", async () => {
+  const pass = document.getElementById("adminPass").value;
+  const adminEstado = document.getElementById("adminEstado");
+  adminEstado.textContent = "Cargando respuestas...";
+  adminEstado.className = "estado";
+
+  try{
+    const data = await llamarPanel({ clave: pass, action: "list" });
+    claveGuardada = pass;
+    adminEstado.textContent = data.respuestas.length + " respuesta(s) recibida(s).";
+    adminEstado.className = "estado ok";
+    renderAdmin(data.respuestas);
+  }catch(e){
+    adminEstado.textContent = e.message === "Clave incorrecta" ? "Clave incorrecta." : ("No se pudieron cargar las respuestas (" + e.message + ").");
+    adminEstado.className = "estado err";
+  }
+});
+
+let ultimasRespuestas = [];
+
+function renderAdmin(respuestas){
+  ultimasRespuestas = respuestas;
+  const cont = document.getElementById("adminContenido");
+  if(respuestas.length === 0){
+    cont.innerHTML = `<div class="card utility">Todavía no hay respuestas registradas.</div>`;
+    return;
+  }
+
+  let tarjetas = "";
+  respuestas.forEach(r => {
+    const d = r.datos || {};
+    const filas = [
+      ["Dobles Masculino", d.dm_a, d.dm_b],
+      ["Dobles Femenino", d.df_a, d.df_b],
+      ["Dobles Mixto", d.mx_a, d.mx_b],
+      ["Singles Hombre", d.sh_a, d.sh_b],
+      ["Singles Mujer", d.sm_a, d.sm_b],
+    ].map(([nombre, a, b]) => `<tr><td>${nombre}</td><td>${a || "—"}</td><td>${b || "—"}</td></tr>`).join("");
+
+    const fecha = new Date(r.fecha);
+    const fechaTexto = isNaN(fecha) ? "" : fecha.toLocaleString("es-CL");
+
+    tarjetas += `
+      <div class="card respuesta-card">
+        <div class="respuesta-header">
+          <div>
+            <div class="respuesta-jugador">${d.jugador || "(sin nombre)"}</div>
+            <div class="respuesta-fecha utility">${fechaTexto}</div>
+          </div>
+          <div class="accion-eliminar">
+            <button type="button" class="eliminar-btn utility" data-action="pedir-confirmacion" data-id="${r.id}">🗑 Eliminar</button>
+          </div>
+        </div>
+        <table class="resumen">
+          <tr><th>Categoría</th><th>A · Preferencia personal</th><th>B · Visión de equipo</th></tr>
+          ${filas}
+        </table>
+      </div>`;
+  });
+
+  cont.innerHTML = `
+    <div class="card">
+      <button type="button" class="descargar-btn" data-action="csv">⬇ Descargar CSV</button>
+      <button type="button" class="refrescar-btn" data-action="refrescar">↻ Refrescar</button>
+    </div>
+    ${tarjetas}
+  `;
+}
+
+document.getElementById("adminContenido").addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-action]");
+  if(!btn) return;
+  const accion = btn.dataset.action;
+  const id = btn.dataset.id;
+
+  if(accion === "refrescar"){
+    document.getElementById("btnDesbloquear").click();
+    return;
+  }
+
+  if(accion === "csv"){
+    descargarCSV(ultimasRespuestas);
+    return;
+  }
+
+  if(accion === "pedir-confirmacion"){
+    const zona = btn.closest(".accion-eliminar");
+    zona.innerHTML = `
+      <span class="confirmar-texto utility">¿Eliminar?</span>
+      <button type="button" class="confirmar-si utility" data-action="confirmar-eliminar" data-id="${id}">Sí</button>
+      <button type="button" class="confirmar-no utility" data-action="cancelar-eliminar" data-id="${id}">No</button>
+    `;
+    return;
+  }
+
+  if(accion === "cancelar-eliminar"){
+    const zona = btn.closest(".accion-eliminar");
+    zona.innerHTML = `<button type="button" class="eliminar-btn utility" data-action="pedir-confirmacion" data-id="${id}">🗑 Eliminar</button>`;
+    return;
+  }
+
+  if(accion === "confirmar-eliminar"){
+    const zona = btn.closest(".accion-eliminar");
+    zona.innerHTML = `<span class="utility" style="font-size:12px;color:var(--gris);">Eliminando...</span>`;
+    try{
+      await llamarPanel({ clave: claveGuardada, action: "delete", id });
+      document.getElementById("btnDesbloquear").click();
+    }catch(err){
+      zona.innerHTML = `<span class="utility" style="font-size:11px;color:var(--rojo);">No se pudo eliminar (${err.message})</span>`;
+    }
+    return;
+  }
+});
+
+function csvEscape(s){
+  if(s == null) s = "";
+  s = String(s);
+  if(s.includes(",") || s.includes('"') || s.includes("\n")){
+    s = '"' + s.replace(/"/g,'""') + '"';
+  }
+  return s;
+}
+
+function descargarCSV(respuestas){
+  const filas = [["Jugador","Fecha","Dobles_Masculino_A","Dobles_Masculino_B","Dobles_Femenino_A","Dobles_Femenino_B","Dobles_Mixto_A","Dobles_Mixto_B","Singles_Hombre_A","Singles_Hombre_B","Singles_Mujer_A","Singles_Mujer_B"]];
+  respuestas.forEach(r => {
+    const d = r.datos || {};
+    filas.push([
+      d.jugador || "",
+      r.fecha || "",
+      d.dm_a || "", d.dm_b || "",
+      d.df_a || "", d.df_b || "",
+      d.mx_a || "", d.mx_b || "",
+      d.sh_a || "", d.sh_b || "",
+      d.sm_a || "", d.sm_b || "",
+    ]);
+  });
+  const csv = filas.map(fila => fila.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "respuestas_team_senior_" + new Date().toISOString().slice(0,10) + ".csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 </script>
 
 </body>
